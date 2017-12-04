@@ -26,7 +26,7 @@ func NewChartbeatInput(config map[string]string, metricLogger core.MetricLogger)
 	limit := 10000
 	cacheSize := 2 * limit
 
-	if val, ok := config["input.chartbeat.limit"]; ok {
+	if val, ok := config["input_chartbeat_limit"]; ok {
 		l, err := strconv.Atoi(val)
 		if err == nil {
 			logrus.Infof("setting chartbeat input request limit to %d", l)
@@ -36,7 +36,7 @@ func NewChartbeatInput(config map[string]string, metricLogger core.MetricLogger)
 		}
 	}
 
-	if val, ok := config["input.chartbeat.cache_size"]; ok  {
+	if val, ok := config["input_chartbeat_cache_size"]; ok  {
 		l, err := strconv.Atoi(val)
 		if err == nil {
 			logrus.Infof("setting chartbeat input cache to %d", l)
@@ -54,8 +54,8 @@ func NewChartbeatInput(config map[string]string, metricLogger core.MetricLogger)
 		metrics: metricLogger,
 		client: chartbeat.ChartbeatLive{
 			Config: &chartbeat.ChartbeatLiveConfig{
-				Domain: config["input.chartbeat.domain"],
-				ApiKey: config["input.chartbeat.api_key"],
+				Domain: config["input_chartbeat_domain"],
+				ApiKey: config["input_chartbeat_api_key"],
 				Limit: limit,
 			},
 		},

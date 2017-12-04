@@ -22,21 +22,21 @@ type KafkaInput struct {
 
 func NewKafkaInput(config map[string]string, metricLogger core.MetricLogger) (*KafkaInput, error) {
 
-	if _, ok := config["input.kafka.topic"]; !ok {
+	if _, ok := config["input_kafka_topic"]; !ok {
 		return nil, errors.New("no data topic has been set")
 	}
 
-	if _, ok := config["input.kafka.group_id"]; !ok {
+	if _, ok := config["input_kafka_group_id"]; !ok {
 		return nil, errors.New("no group id has been set")
 	}
 
-	if _, ok := config["input.kafka.bootstrap_servers"]; !ok {
+	if _, ok := config["input_kafka_bootstrap_servers"]; !ok {
 		return nil, errors.New("no bootstrap servers have been set")
 	}
 
 	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": 				config["input.kafka.bootstrap_servers"],
-		"group.id":                        	config["input.kafka.group_id"],
+		"bootstrap.servers": 				config["input_kafka_bootstrap_servers"],
+		"group.id":                        	config["input_kafka_group_id"],
 		"session.timeout.ms":              	6000,
 		"go.events.channel.enable":        	true,
 		"go.application.rebalance.enable": 	true,

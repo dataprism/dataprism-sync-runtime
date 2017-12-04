@@ -83,8 +83,8 @@ func main() {
 }
 
 func createInputWorkers(config map[string]string, metricLogger core.MetricLogger) ([]inputs.Input, error) {
-	inputType, isSet := config["input.type"]
-	if !isSet { return nil, errors.New("no input.type has been set") }
+	inputType, isSet := config["input_type"]
+	if !isSet { return nil, errors.New("no input_type has been set") }
 
 	inputCount := 1
 
@@ -104,8 +104,8 @@ func createInputWorkers(config map[string]string, metricLogger core.MetricLogger
 }
 
 func createOutputWorkers(config map[string]string, metricLogger core.MetricLogger) ([]outputs.Output, error) {
-	outputType, isSet := config["output.type"]
-	if !isSet { return nil, errors.New("no output.type has been set") }
+	outputType, isSet := config["output_type"]
+	if !isSet { return nil, errors.New("no output_type has been set") }
 
 	outputCount := 1
 

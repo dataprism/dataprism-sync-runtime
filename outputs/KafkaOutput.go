@@ -17,20 +17,20 @@ type KafkaOutput struct {
 }
 
 func NewKafkaOutput(config map[string]string, metricLogger core.MetricLogger) (*KafkaOutput, error) {
-	if _, ok := config["output.kafka.error_topic"]; !ok {
-		config["output.kafka.error_topic"] = "errors"
+	if _, ok := config["output_kafka_error_topic"]; !ok {
+		config["output_kafka_error_topic"] = "errors"
 	}
 
-	if _, ok := config["output.kafka.data_topic"]; !ok {
+	if _, ok := config["output_kafka_data_topic"]; !ok {
 		return nil, errors.New("no data topic has been set")
 	}
 
-	if _, ok := config["output.kafka.bootstrap_servers"]; !ok {
+	if _, ok := config["output_kafka_bootstrap_servers"]; !ok {
 		return nil, errors.New("no bootstrap servers have been set")
 	}
 
 	c := &kafka.ConfigMap{
-		"bootstrap.servers": config["output.kafka.bootstrap_servers"],
+		"bootstrap.servers": config["output_kafka_bootstrap_servers"],
 	}
 
 	p, err := kafka.NewProducer(c)
@@ -41,8 +41,8 @@ func NewKafkaOutput(config map[string]string, metricLogger core.MetricLogger) (*
 		return &KafkaOutput{
 			producer: *p,
 			metrics: metricLogger,
-			errorTopic: config["output.kafka.error_topic"],
-			dataTopic: config["output.kafka.data_topic"],
+			errorTopic: config["output_kafka_error_topic"],
+			dataTopic: config["output_kafka_data_topic"],
 		}, nil
 	}
 }
