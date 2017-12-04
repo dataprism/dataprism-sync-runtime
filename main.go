@@ -10,24 +10,13 @@ import (
 	"github.com/dataprism/dataprism-sync-runtime/inputs"
 	"github.com/dataprism/dataprism-sync-runtime/outputs"
 	"github.com/dataprism/dataprism-sync-runtime/sfx"
+	"errors"
 )
 
 func main() {
 
 	pollInterval := 5000
 	flag.IntVar(&pollInterval, "interval-ms", pollInterval, "The polling interval in milliseconds")
-
-	inputCount := 1
-	flag.IntVar(&inputCount, "input-workers", inputCount, "Input Worker Count")
-
-	inputType := ""
-	flag.StringVar(&inputType, "input-type", inputType, "The Type of input to use")
-
-	outputCount := 1
-	flag.IntVar(&outputCount, "output-workers", outputCount, "Collector Worker Count")
-
-	outputType := ""
-	flag.StringVar(&outputType, "output-type", outputType, "The Type of collector to use")
 
 	signalFxToken := ""
 	flag.StringVar(&signalFxToken, "signalfx", signalFxToken, "The signalFX Auth Token")
@@ -46,7 +35,7 @@ func main() {
 	metricLogger, err := sfx.NewSignalFXMetricLogger(signalFxToken, nil)
 
 	// -- create the input workers
-	inputWorkers, err := createInputWorkers(inputType, config, inputCount, metricLogger)
+	inputWorkers, err := createInputWorkers(config, metricLogger)
 	if err != nil {
 		logrus.Error("Unable to create the input workers")
 		logrus.Error(err)
@@ -56,7 +45,7 @@ func main() {
 	}
 
 	// -- create the output workers
-	outputWorkers, err := createOutputWorkers(outputType, config, outputCount, metricLogger)
+	outputWorkers, err := createOutputWorkers(config, metricLogger)
 	if err != nil {
 		logrus.Error("Unable to create the output workers")
 		logrus.Error(err)
@@ -92,7 +81,12 @@ func main() {
 	}
 }
 
-func createInputWorkers(inputType string, config map[string]string, inputCount int, metricLogger core.MetricLogger) ([]inputs.Input, error) {
+func createInputWorkers(config map[string]string, metricLogger core.MetricLogger) ([]inputs.Input, error) {
+	inputType, isSet := config["input.type"]
+	if !isSet { return nil, errors.New("no input.type has been set") }
+
+	inputCount := 1
+
 	result := make([]inputs.Input, inputCount)
 
 	for i := 0; i < inputCount; i++ {
@@ -108,11 +102,16 @@ func createInputWorkers(inputType string, config map[string]string, inputCount i
 	return result, nil
 }
 
-func createOutputWorkers(collectorType string, config map[string]string, outputCount int, metricLogger core.MetricLogger) ([]outputs.Output, error) {
+func createOutputWorkers(config map[string]string, metricLogger core.MetricLogger) ([]outputs.Output, error) {
+	outputType, isSet := config["output.type"]
+	if !isSet { return nil, errors.New("no output.type has been set") }
+
+	outputCount := 1
+
 	result := make([]outputs.Output, outputCount)
 
 	for i := 0; i < outputCount; i++ {
-		output, err := outputs.NewOutput(collectorType, config, metricLogger)
+		output, err := outputs.NewOutput(outputType, config, metricLogger)
 
 		if err != nil {
 			return nil, err
