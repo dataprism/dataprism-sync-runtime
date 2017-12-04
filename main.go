@@ -27,6 +27,7 @@ func main() {
 	for _, e := range os.Environ() {
 		pair := strings.Split(e, "=")
 		config[pair[0]] = pair[1]
+		logrus.Info(pair[0] + " = " + pair[1])
 	}
 
 	logrus.SetLevel(logrus.DebugLevel)
