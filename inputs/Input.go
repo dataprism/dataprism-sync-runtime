@@ -18,6 +18,9 @@ func NewInput(inputType string, config map[string]string, metricLogger core.Metr
 	case "chartbeat":
 		return NewChartbeatInput(config, metricLogger)
 
+	case "api":
+		return NewApiInput(config, metricLogger)
+
 	case "kafka":
 		return NewKafkaInput(config, metricLogger)
 

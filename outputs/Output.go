@@ -17,6 +17,9 @@ func NewOutput(outputType string, config map[string]string, metricLogger core.Me
 	case "kafka":
 		return NewKafkaOutput(config, metricLogger)
 
+	case "elasticsearch":
+		return NewElasticSearchOutput(config, &metricLogger)
+
 	default:
 		return nil, errors.New("Invalid output type '" + outputType + "'")
 	}
