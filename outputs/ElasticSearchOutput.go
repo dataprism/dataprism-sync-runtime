@@ -44,10 +44,8 @@ func NewElasticSearchOutput(config map[string]string, metricLogger *core.MetricL
 	client, err := elastic.NewClient(
 		elastic.SetURL(config["output_es_servers"]),
 		elastic.SetBasicAuth(username, password),
-	);
-	if err != nil {
-		return nil, err
-	}
+		elastic.SetSniff(false),
+	)
 
 	if err != nil {
 		return nil, err
@@ -78,13 +76,13 @@ func (o *ElasticSearchOutput) Start(done chan int, dataChannel chan core.Data, e
 
 				_, err := o.client.Index().
 					Index(o.index).
-					Type("tweet").
+					Type(o.kind).
 					Id(string(dataEvent.GetKey())).
 					BodyJson(string(dataEvent.GetValue())).
 					Do(context.Background())
 
 				if err != nil {
-					logrus.Warn(err)
+					logrus.Warn("Unable to index the events! ", err.Error())
 				}
 
 			case <-errorsChannel:
