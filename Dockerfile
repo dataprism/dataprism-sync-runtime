@@ -9,9 +9,9 @@ RUN cd /tmp && \
     ldconfig && \
     cd && \
     rm -rf /tmp/librdkafka && \
-    mkdir -p /go/src/gitlab.com/vrtoeni/to-kafka
+    mkdir -p /go/src/github.com/dataprism/dataprism-sync-runtime
 
-WORKDIR /go/src/gitlab.com/vrtoeni/to-kafka
+WORKDIR /go/src/github.com/dataprism/dataprism-sync-runtime
 COPY . .
 
 RUN go-wrapper download   # "go get -d -v ./..."

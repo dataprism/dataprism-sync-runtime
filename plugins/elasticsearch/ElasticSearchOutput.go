@@ -1,4 +1,4 @@
-package outputs
+package elasticsearch
 
 import (
 	"errors"
@@ -6,18 +6,19 @@ import (
 	"github.com/dataprism/dataprism-sync-runtime/core"
 	"gopkg.in/olivere/elastic.v5"
 	"context"
+	"github.com/armon/go-metrics"
 )
 
 type ElasticSearchOutput struct {
 	client *elastic.Client
 
-	metrics *core.MetricLogger
+	metrics *metrics.Metrics
 
 	index string
 	kind string
 }
 
-func NewElasticSearchOutput(config map[string]string, metricLogger *core.MetricLogger) (*ElasticSearchOutput, error) {
+func NewElasticSearchOutput(config map[string]string, metrics *metrics.Metrics) (core.Worker, error) {
 	if _, ok := config["output_es_servers"]; !ok {
 		return nil, errors.New("no elasticsearch servers have been set")
 	}
@@ -52,46 +53,40 @@ func NewElasticSearchOutput(config map[string]string, metricLogger *core.MetricL
 	} else {
 		return &ElasticSearchOutput{
 			client: client,
-			metrics: metricLogger,
+			metrics: metrics,
 			index: config["output_es_index"],
 			kind: config["output_es_type"],
 		}, nil
 	}
 }
 
-func (o *ElasticSearchOutput) Start(done chan int, dataChannel chan core.Data, errorsChannel chan error) error {
-	go func() {
-		run := true
+func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan core.Data, errorsChannel chan error) {
+	for {
+		select {
+		case <-done:
+			logrus.Info("Stopping ElasticSearch Output On User Request")
+			break;
 
-		for run == true {
-			select {
-			case <-done:
-				logrus.Info("Stopping ElasticSearch Output On User Request")
-				run = false
-
-			case dataEvent := <-dataChannel:
-				if dataEvent == nil {
-					continue
-				}
-
-				_, err := o.client.Index().
-					Index(o.index).
-					Type(o.kind).
-					Id(string(dataEvent.GetKey())).
-					BodyJson(string(dataEvent.GetValue())).
-					Do(context.Background())
-
-				if err != nil {
-					logrus.Warn("Unable to index the events! ", err.Error())
-				}
-
-			case <-errorsChannel:
-
+		case dataEvent := <-dataChannel:
+			if dataEvent == nil {
+				continue
 			}
-		}
-	}()
 
-	return nil
+			_, err := o.client.Index().
+				Index(o.index).
+				Type(o.kind).
+				Id(string(dataEvent.GetKey())).
+				BodyJson(string(dataEvent.GetValue())).
+				Do(context.Background())
+
+			if err != nil {
+				logrus.Warn("Unable to index the events! ", err.Error())
+			}
+
+		case <-errorsChannel:
+
+		}
+	}
 }
 
 

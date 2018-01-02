@@ -1,4 +1,4 @@
-package inputs
+package rest
 
 import (
 	"encoding/json"
@@ -9,69 +9,76 @@ import (
 	"net/http"
 	"io/ioutil"
 	"strconv"
+	"github.com/armon/go-metrics"
 )
 
-type ApiInput struct {
+type RestInputWorker struct {
 	url string
 	idField string
 	idFieldType string
-
 	isArray bool
-	interval int
 
-	metrics core.MetricLogger
+	interval int
+	ticker *time.Ticker
+
+	metrics *metrics.Metrics
 }
 
-func NewApiInput(config map[string]string, metricLogger core.MetricLogger) (*ApiInput, error) {
-	var url string
-	var idField = "id"
-	var idFieldType = "string"
+func NewRestInputWorker(config map[string]string, metrics *metrics.Metrics) (core.Worker, error) {
 	var isArray = false
+	var interval = 10000
 
-	if val, ok := config["input_api_url"]; ok  {
-		url = val
-	} else {
+	if _, ok := config["input_rest_url"]; !ok  {
 		return nil, errors.New("no url has been provided")
 	}
 
-	if val, ok := config["input_api_id_field"]; ok  {
-		idField = val
-	} else {
-		return nil, errors.New("no id_field has been provided")
+	if _, ok := config["input_rest_id_field"]; !ok  {
+		config["input_api_id_field"] = "id"
 	}
 
-	if val, ok := config["input_api_id_field_type"]; ok  {
-		idFieldType = val
+	if _, ok := config["input_rest_id_field_type"]; !ok  {
+		config["input_api_id_field_type"] = "string"
 	}
 
-	if val, ok := config["input_api_array"]; ok  {
+	if val, ok := config["input_rest_array"]; ok  {
 		isArray = val == "true"
 	}
 
-	return &ApiInput{
-		url: url,
-		metrics: metricLogger,
-		idField: idField,
-		idFieldType: idFieldType,
+	if val, ok := config["input_rest_interval"]; ok  {
+		i, err := strconv.Atoi(val)
+
+		if err != nil {
+			return nil, errors.New("The interval has to be a positive number expressing the number of milliseconds between polls")
+		}
+
+		interval = i
+	}
+
+	return &RestInputWorker{
+		url: config["input_api_url"],
+		metrics: metrics,
+		idField: config["input_api_id_field"],
+		idFieldType: config["input_api_id_field_type"],
 		isArray: isArray,
+		ticker: time.NewTicker(time.Duration(interval) * time.Millisecond),
 	}, nil
 }
 
-func (i *ApiInput) Start(ticker *time.Ticker, done chan int, dataChannel chan core.Data, errorsChannel chan error) error {
+func (i *RestInputWorker) Run(done chan int, dataChannel chan core.Data, errorsChannel chan error) {
 	for {
 		select {
-		case <- ticker.C:
+		case <- i.ticker.C:
 			logrus.Debugf("Scheduled a new request to %s", i.url)
 			i.call(dataChannel, errorsChannel)
 
 		case <- done:
-			ticker.Stop()
-			return nil
+			i.ticker.Stop()
+			break
 		}
 	}
 }
 
-func (i *ApiInput) call(dataChannel chan core.Data, errorsChannel chan error) {
+func (i *RestInputWorker) call(dataChannel chan core.Data, errorsChannel chan error) {
 	resp, err := http.DefaultClient.Get(i.url)
 
 	if err != nil {

@@ -1,31 +1,52 @@
 # Dataprism Sync Runtime
+This projects holds the process which is running inside the docker containers spawned by dataprism sync.
 
-## Requirements
+The runtime is built around plugins and makes heavy use of go's channels to ship data from inputs to outputs
+. No actual transformation is being done on the data, it is just taken from the input and sent to the output. 
+Processing should be done before or after syncing.
+
+The code uses the notion of plugins, but a refactoring towards golang plugins still has to be done and is part of 
+the roadmap.
+
+A Sync Runtime process always combines a single inputType with a single outputType. Multiple processes need to be
+spawned if more input/outputs are needed.
+
+Configuration is done through environment variables. Take a look at the plugins (KafkaPlugin, RestPlugin, ...) to get 
+an idea of what can be configured.
+
+## Plugins
+The following plugins are currently available and provide inputs and/or outputs.
+
+### Apache Kafka
+The kafka plugin includes a KafkaInput and a KafkaOutput to read data from a topic inside a kafka cluster or
+write data to a topic in a kafka cluster. It makes use of the widely used librdkafka library.
+
 ```
 brew install pkg-config
 brew install librdkafka
 ```
 
-## Inputs
-### API
-Api input can poll an api for data at regular intervals.
+| kafka     | |
+| --------- | ---------------------------------------------- |
+| plugin    | [KafkaPlugin](../blob/master/plugins/kafka/KafkaPlugin) |
+| inputs    | [KafkaInput](../blob/master/plugins/kafka/KafkaInput) |
+| outputs   | [KafkaOutput](../blob/master/plugins/kafka/KafkaOutput) |
 
-| Environment Var           | Description                                    | Required | Default  |
-| ------------------------- | ---------------------------------------------- | :------: | -------- |
-| input_api_url             | The url to poll                                | yes      |          |
-| input_api_id_field        | The name of the field holding the unique id    | no       | "id"     |
-| input_api_id_field_type   | The type of the field holding the unique id. "string" and "number" are supported | no       | "string" |
-| input_api_array           | Is the response from the url a json array?     | no       | yes      |
-
-### Kafka
-The Kafka Input can listen for data on specific topics on a given kafka cluster. 
-
-| Environment Var                 | Description                                    | Required | Default          |
-| ------------------------------- | ---------------------------------------------- | :------: | ---------------- |
-| input_kafka_bootstrap_servers   | The kafka nodes to connect to                  | yes      | |
-| input_kafka_group_id            | The name of the group to which the listener belongs | yes |     |
-| input_kafka_topic               | The topic from which to read the data          | yes      |          |
-
-## Outputs
 ### ElasticSearch
-### Kafka
+The ElasticSearch plugin contains an output which sends events to elasticsearch to be indexed.
+
+| elasticsearch     | |
+| ----------------- | ---------------------------------------------- |
+| plugin            | [ElasticSearchPlugin](../blob/master/plugins/elasticsearch/ElasticSearchPlugin) |
+| inputs            |  |
+| outputs           | [ElasticSearchOutput](../blob/master/plugins/elasticsearch/ElasticSearchOutput) |
+
+### Rest
+The rest plugin provides an input to read from a rest API. It does so in a pretty naive way by just requesting
+a response on a pre-configured interval.
+
+| rest      | |
+| --------- | ---------------------------------------------- |
+| plugin    | [RestPlugin](../blob/master/plugins/rest/RestPlugin) |
+| inputs    | [RestInput](../blob/master/plugins/rest/RestInput) |
+| outputs   | |
