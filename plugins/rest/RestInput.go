@@ -55,10 +55,10 @@ func NewRestInputWorker(config map[string]string, metrics *metrics.Metrics) (cor
 	}
 
 	return &RestInputWorker{
-		url: config["input_api_url"],
+		url: config["input_rest_url"],
 		metrics: metrics,
-		idField: config["input_api_id_field"],
-		idFieldType: config["input_api_id_field_type"],
+		idField: config["input_rest_id_field"],
+		idFieldType: config["input_rest_id_field_type"],
 		isArray: isArray,
 		ticker: time.NewTicker(time.Duration(interval) * time.Millisecond),
 	}, nil

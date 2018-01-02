@@ -72,6 +72,8 @@ func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan core.Data, err
 				continue
 			}
 
+			logrus.Debugf("Retrieved an event with key %s", dataEvent.GetKey())
+
 			_, err := o.client.Index().
 				Index(o.index).
 				Type(o.kind).
@@ -83,8 +85,8 @@ func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan core.Data, err
 				logrus.Warn("Unable to index the events! ", err.Error())
 			}
 
-		case <-errorsChannel:
-
+		case err := <-errorsChannel:
+			logrus.Error(err)
 		}
 	}
 }

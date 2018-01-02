@@ -10,6 +10,7 @@ import (
 	"github.com/dataprism/dataprism-sync-runtime/plugins/kafka"
 	"github.com/dataprism/dataprism-sync-runtime/plugins/elasticsearch"
 	"github.com/dataprism/dataprism-sync-runtime/plugins/rest"
+	"github.com/dataprism/dataprism-sync-runtime/plugins"
 )
 
 
@@ -34,7 +35,7 @@ func main() {
 
 	// -- initialize the plugin registry
 	logrus.Info("Initializing the plugin registry")
-	pluginRegistry := NewPluginRegistry()
+	pluginRegistry := plugins.NewPluginRegistry()
 	pluginRegistry.Add(&kafka.DataprismSyncPlugin{})
 	pluginRegistry.Add(&elasticsearch.DataprismSyncPlugin{})
 	pluginRegistry.Add(&rest.DataprismSyncPlugin{})
@@ -63,6 +64,11 @@ func main() {
 	logrus.Info("Starting the workers")
 	go outputWorker.Run(done, dataChannel, errorChannel)
 	go inputWorker.Run(done, dataChannel, errorChannel)
+
+	select {
+		case <- done:
+
+	}
 }
 
 func initializeMetrics() (*metrics.Metrics, error) {
