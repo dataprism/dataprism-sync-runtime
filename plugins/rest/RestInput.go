@@ -84,12 +84,24 @@ func (i *RestInputWorker) call(dataChannel chan core.Data, errorsChannel chan er
 	if err != nil {
 		logrus.Warn("unable to make the request to " + i.url, err)
 		errorsChannel <- err
+
+		i.metrics.IncrCounterWithLabels([]string{"input.messages.count"}, 1, []metrics.Label{
+			{"state", "failed"},
+			{"input", "rest"},
+			{"url", i.url},
+		})
 	} else {
 		data, err := ioutil.ReadAll(resp.Body)
 
 		if err != nil {
 			logrus.Warn(err)
 			errorsChannel <- err
+
+			i.metrics.IncrCounterWithLabels([]string{"input.messages.count"}, 1, []metrics.Label{
+				{"state", "failed"},
+				{"input", "rest"},
+				{"url", i.url},
+			})
 		} else {
 			if i.isArray {
 				var obj []map[string]interface{}
@@ -105,6 +117,13 @@ func (i *RestInputWorker) call(dataChannel chan core.Data, errorsChannel chan er
 						if idValue == nil {
 							errorsChannel <- errors.New("no id value was available on the record")
 							logrus.Warn("no id value was available on the record")
+
+							i.metrics.IncrCounterWithLabels([]string{"input.messages.count"}, 1, []metrics.Label{
+								{"state", "failed"},
+								{"input", "rest"},
+								{"url", i.url},
+							})
+
 							continue;
 						}
 
@@ -119,6 +138,12 @@ func (i *RestInputWorker) call(dataChannel chan core.Data, errorsChannel chan er
 						if err != nil {
 							logrus.Warn(err)
 							errorsChannel <- err
+
+							i.metrics.IncrCounterWithLabels([]string{"input.messages.count"}, 1, []metrics.Label{
+								{"state", "failed"},
+								{"input", "rest"},
+								{"url", i.url},
+							})
 						} else {
 							msg := &core.RawData{
 								Key: []byte(key),
@@ -126,6 +151,12 @@ func (i *RestInputWorker) call(dataChannel chan core.Data, errorsChannel chan er
 							}
 
 							dataChannel <- msg
+
+							i.metrics.IncrCounterWithLabels([]string{"input.messages.count"}, 1, []metrics.Label{
+								{"state", "processed"},
+								{"input", "rest"},
+								{"url", i.url},
+							})
 						}
 					}
 				}
@@ -136,6 +167,12 @@ func (i *RestInputWorker) call(dataChannel chan core.Data, errorsChannel chan er
 				if err != nil {
 					logrus.Warn(err)
 					errorsChannel <- err
+
+					i.metrics.IncrCounterWithLabels([]string{"input.messages.count"}, 1, []metrics.Label{
+						{"state", "failed"},
+						{"input", "rest"},
+						{"url", i.url},
+					})
 				} else {
 					idValue := obj[i.idField]
 
@@ -152,6 +189,12 @@ func (i *RestInputWorker) call(dataChannel chan core.Data, errorsChannel chan er
 					}
 
 					dataChannel <- msg
+
+					i.metrics.IncrCounterWithLabels([]string{"input.messages.count"}, 1, []metrics.Label{
+						{"state", "success"},
+						{"input", "rest"},
+						{"url", i.url},
+					})
 				}
 			}
 		}

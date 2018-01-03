@@ -74,6 +74,13 @@ func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan []core.Data, e
 
 			logrus.Debugf("Retrieved %d data events", len(dataEvents))
 
+			o.metrics.IncrCounterWithLabels([]string{"output.messages.count"}, float32(len(dataEvents)), []metrics.Label{
+				{"state", "offered" },
+				{"output", "elasticsearch" },
+				{"index", o.index },
+				{"type", o.kind },
+			})
+
 			bulk := o.client.Bulk()
 
 			for _, e := range dataEvents {
@@ -84,10 +91,42 @@ func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan []core.Data, e
 					Doc(string(e.GetValue())))
 			}
 
-			_, err := bulk.Do(context.Background())
+			resp, err := bulk.Do(context.Background())
 
 			if err != nil {
 				logrus.Warn("Unable to index the events! ", err.Error())
+			}
+
+			errorCount := 0
+			successCount := 0
+
+			for _, v := range resp.Items {
+				r, ok := v["index"]
+				if !ok { continue }
+
+				if r.Status >= 200 && r.Status < 300 {
+					successCount += 1
+				} else {
+					errorCount += 1
+				}
+			}
+
+			if successCount > 0 {
+				o.metrics.IncrCounterWithLabels([]string{"output.messages.count"}, float32(successCount), []metrics.Label{
+					{"state", "success"},
+					{"output", "elasticsearch"},
+					{"index", o.index},
+					{"type", o.kind},
+				})
+			}
+
+			if errorCount > 0 {
+				o.metrics.IncrCounterWithLabels([]string{"output.messages.count"}, float32(errorCount), []metrics.Label{
+					{"state", "failed"},
+					{"output", "elasticsearch"},
+					{"index", o.index},
+					{"type", o.kind},
+				})
 			}
 
 		case err := <-errorsChannel:

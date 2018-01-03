@@ -13,6 +13,8 @@ import (
 	"github.com/dataprism/dataprism-sync-runtime/plugins"
 	"strconv"
 	"time"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
 )
 
 
@@ -81,9 +83,12 @@ func main() {
 	go buffer.Run(done, dataInputChannel, errorChannel)
 	go inputWorker.Run(done, dataInputChannel, errorChannel)
 
-	select {
-		case <- done:
-	}
+	//select {
+	//	case <- done:
+	//}
+
+	http.Handle("/metrics", promhttp.Handler())
+	logrus.Fatal(http.ListenAndServe(":7654", nil))
 }
 
 func initializeMetrics() (*metrics.Metrics, error) {
