@@ -11,6 +11,8 @@ import (
 	"github.com/dataprism/dataprism-sync-runtime/plugins/elasticsearch"
 	"github.com/dataprism/dataprism-sync-runtime/plugins/rest"
 	"github.com/dataprism/dataprism-sync-runtime/plugins"
+	"strconv"
+	"time"
 )
 
 
@@ -57,17 +59,30 @@ func main() {
 	if err != nil { logrus.Fatal("Unable to create an instance of the output worker", err) }
 
 	logrus.Info("Creating the data and error channels")
-	dataChannel := make(chan core.Data)
+	dataInputChannel := make(chan core.Data)
+	dataOutputChannel := make(chan []core.Data)
 	errorChannel := make(chan error)
 	done := make(chan int)
 
+	if _, ok := config["buffer_duration"]; !ok { config["buffer_duration"] = "10000"; }
+	if _, ok := config["buffer_size"]; !ok { config["buffer_size"] = "1000"; }
+	logrus.Infof("Creating the buffer with duration %s and size %s", config["buffer_duration"], config["buffer_size"])
+
+	size, err := strconv.Atoi(config["buffer_size"])
+	if err != nil { logrus.Fatal("Unable to convert the buffer size into an integer value")}
+
+	duration, err := strconv.Atoi(config["buffer_duration"])
+	if err != nil { logrus.Fatal("Unable to convert the buffer duration into an integer value")}
+
+	buffer := core.NewDataBuffer(dataOutputChannel, size, time.Duration(duration) * time.Second)
+
 	logrus.Info("Starting the workers")
-	go outputWorker.Run(done, dataChannel, errorChannel)
-	go inputWorker.Run(done, dataChannel, errorChannel)
+	go outputWorker.Run(done, dataOutputChannel, errorChannel)
+	go buffer.Run(done, dataInputChannel, errorChannel)
+	go inputWorker.Run(done, dataInputChannel, errorChannel)
 
 	select {
 		case <- done:
-
 	}
 }
 

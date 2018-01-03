@@ -24,7 +24,7 @@ type RestInputWorker struct {
 	metrics *metrics.Metrics
 }
 
-func NewRestInputWorker(config map[string]string, metrics *metrics.Metrics) (core.Worker, error) {
+func NewRestInputWorker(config map[string]string, metrics *metrics.Metrics) (core.InputWorker, error) {
 	var isArray = false
 	var interval = 10000
 

@@ -17,7 +17,7 @@ type KafkaOutputWorker struct {
 	dataTopic string
 }
 
-func NewKafkaOutputWorker(config map[string]string, metrics *metrics.Metrics) (core.Worker, error) {
+func NewKafkaOutputWorker(config map[string]string, metrics *metrics.Metrics) (core.OutputWorker, error) {
 	if _, ok := config["output_kafka_error_topic"]; !ok {
 		config["output_kafka_error_topic"] = "errors"
 	}
@@ -48,7 +48,7 @@ func NewKafkaOutputWorker(config map[string]string, metrics *metrics.Metrics) (c
 	}
 }
 
-func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan core.Data, errorsChannel chan error) {
+func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan []core.Data, errorsChannel chan error) {
 	run := true
 
 	for run == true {
@@ -74,20 +74,22 @@ func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan core.Data, error
 				logrus.Debugf("ignored event: %s\n", ev)
 			}
 
-		case dataEvent := <-dataChannel:
-			if dataEvent == nil {
+		case dataEvents := <-dataChannel:
+			if dataEvents == nil {
 				continue
 			}
 
-			o.producer.ProduceChannel() <- &kafka.Message{
-				TopicPartition: kafka.TopicPartition{Topic: &o.dataTopic, Partition: kafka.PartitionAny},
-				Timestamp:      time.Now(),
-				TimestampType:  kafka.TimestampLogAppendTime,
-				Key:            dataEvent.GetKey(),
-				Value:          dataEvent.GetValue(),
-			}
+			for _, e := range dataEvents {
+				o.producer.ProduceChannel() <- &kafka.Message{
+					TopicPartition: kafka.TopicPartition{Topic: &o.dataTopic, Partition: kafka.PartitionAny},
+					Timestamp:      time.Now(),
+					TimestampType:  kafka.TimestampLogAppendTime,
+					Key:            e.GetKey(),
+					Value:          e.GetValue(),
+				}
 
-			o.metrics.IncrCounter([]string{"output.kafka.written"}, 1)
+				o.metrics.IncrCounter([]string{"output.kafka.written"}, 1)
+			}
 
 		case errorEvent := <-errorsChannel:
 			if errorEvent == nil {

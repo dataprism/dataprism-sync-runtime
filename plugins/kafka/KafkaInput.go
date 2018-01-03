@@ -14,7 +14,7 @@ type KafkaInputWorker struct {
 	metrics *metrics.Metrics
 }
 
-func NewKafkaInputWorker(config map[string]string, metrics *metrics.Metrics) (core.Worker, error) {
+func NewKafkaInputWorker(config map[string]string, metrics *metrics.Metrics) (core.InputWorker, error) {
 
 	if _, ok := config["input_kafka_topic"]; !ok {
 		return nil, errors.New("no data topic has been set")

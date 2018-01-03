@@ -18,7 +18,7 @@ type ElasticSearchOutput struct {
 	kind string
 }
 
-func NewElasticSearchOutput(config map[string]string, metrics *metrics.Metrics) (core.Worker, error) {
+func NewElasticSearchOutput(config map[string]string, metrics *metrics.Metrics) (core.OutputWorker, error) {
 	if _, ok := config["output_es_servers"]; !ok {
 		return nil, errors.New("no elasticsearch servers have been set")
 	}
@@ -60,26 +60,31 @@ func NewElasticSearchOutput(config map[string]string, metrics *metrics.Metrics) 
 	}
 }
 
-func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan core.Data, errorsChannel chan error) {
+func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan []core.Data, errorsChannel chan error) {
 	for {
 		select {
 		case <-done:
 			logrus.Info("Stopping ElasticSearch Output On User Request")
 			break;
 
-		case dataEvent := <-dataChannel:
-			if dataEvent == nil {
+		case dataEvents := <-dataChannel:
+			if dataEvents == nil {
 				continue
 			}
 
-			logrus.Debugf("Retrieved an event with key %s", dataEvent.GetKey())
+			logrus.Debugf("Retrieved %d data events", len(dataEvents))
 
-			_, err := o.client.Index().
-				Index(o.index).
-				Type(o.kind).
-				Id(string(dataEvent.GetKey())).
-				BodyJson(string(dataEvent.GetValue())).
-				Do(context.Background())
+			bulk := o.client.Bulk()
+
+			for _, e := range dataEvents {
+				bulk.Add(elastic.NewBulkIndexRequest().
+					Index(o.index).
+					Type(o.kind).
+					Id(string(e.GetKey())).
+					Doc(string(e.GetValue())))
+			}
+
+			_, err := bulk.Do(context.Background())
 
 			if err != nil {
 				logrus.Warn("Unable to index the events! ", err.Error())
