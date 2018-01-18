@@ -50,7 +50,7 @@ func NewKafkaInput(config map[string]string, metricLogger core.MetricLogger) (*K
 	return &KafkaInput{
 		metrics: metricLogger,
 		consumer: consumer,
-		topic: config["input.kafka.topic"],
+		topic: config["input_kafka_topic"],
 	}, nil
 }
 
