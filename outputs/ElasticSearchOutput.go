@@ -15,6 +15,7 @@ type ElasticSearchOutput struct {
 
 	index string
 	kind string
+	pipeline string
 }
 
 func NewElasticSearchOutput(config map[string]string, metricLogger *core.MetricLogger) (*ElasticSearchOutput, error) {
@@ -32,6 +33,7 @@ func NewElasticSearchOutput(config map[string]string, metricLogger *core.MetricL
 
 	username := "elastic"
 	password := "changeme"
+	pipeline := ""
 
 	if val, ok := config["output_es_username"]; ok {
 		username = val
@@ -39,6 +41,10 @@ func NewElasticSearchOutput(config map[string]string, metricLogger *core.MetricL
 
 	if val, ok := config["output_es_password"]; ok {
 		password = val
+	}
+
+	if val, ok := config["output_es_pipeline"]; ok {
+		pipeline = val
 	}
 
 	client, err := elastic.NewClient(
@@ -50,11 +56,12 @@ func NewElasticSearchOutput(config map[string]string, metricLogger *core.MetricL
 	if err != nil {
 		return nil, err
 	} else {
-		return &ElasticSearchOutput{
+			return &ElasticSearchOutput{
 			client: client,
 			metrics: metricLogger,
 			index: config["output_es_index"],
 			kind: config["output_es_type"],
+			pipeline: pipeline,
 		}, nil
 	}
 }
@@ -74,12 +81,16 @@ func (o *ElasticSearchOutput) Start(done chan int, dataChannel chan core.Data, e
 					continue
 				}
 
-				_, err := o.client.Index().
+				req := o.client.Index().
 					Index(o.index).
 					Type(o.kind).
 					Id(string(dataEvent.GetKey())).
-					BodyJson(string(dataEvent.GetValue())).
-					Do(context.Background())
+					BodyJson(string(dataEvent.GetValue()));
+
+				if len(o.pipeline) > 0 {
+					req = req.Pipeline(o.pipeline)
+				}
+				_, err := req.Do(context.Background())
 
 				if err != nil {
 					logrus.Warn("Unable to index the events! ", err.Error())
