@@ -2,23 +2,22 @@ package elasticsearch
 
 import (
 	"errors"
-	"github.com/sirupsen/logrus"
 	"github.com/dataprism/dataprism-sync-runtime/core"
 	"gopkg.in/olivere/elastic.v5"
 	"context"
-	"github.com/armon/go-metrics"
 )
 
 type ElasticSearchOutput struct {
 	client *elastic.Client
 
-	metrics *metrics.Metrics
+	tracer core.Tracer
+	serviceName string
 
 	index string
 	kind string
 }
 
-func NewElasticSearchOutput(config map[string]string, metrics *metrics.Metrics) (core.OutputWorker, error) {
+func NewElasticSearchOutput(config map[string]string, tracer core.Tracer) (core.OutputWorker, error) {
 	if _, ok := config["output_es_servers"]; !ok {
 		return nil, errors.New("no elasticsearch servers have been set")
 	}
@@ -53,86 +52,66 @@ func NewElasticSearchOutput(config map[string]string, metrics *metrics.Metrics) 
 	} else {
 		return &ElasticSearchOutput{
 			client: client,
-			metrics: metrics,
+			tracer: tracer,
+			serviceName: config["app"],
 			index: config["output_es_index"],
 			kind: config["output_es_type"],
 		}, nil
 	}
 }
 
-func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan []core.Data, errorsChannel chan error) {
+func (o *ElasticSearchOutput) Run(done chan int, dataChannel chan []core.Data) {
 	for {
 		select {
 		case <-done:
-			logrus.Info("Stopping ElasticSearch Output On User Request")
-			break;
+			o.tracer.Event(core.NewTracerEvent(o.serviceName, "elasticsearch-output", "USER_SHUTDOWN", ""))
+			break
 
 		case dataEvents := <-dataChannel:
 			if dataEvents == nil {
-				continue
+				break
 			}
-
-			logrus.Debugf("Retrieved %d data events", len(dataEvents))
-
-			o.metrics.IncrCounterWithLabels([]string{"output.messages.count"}, float32(len(dataEvents)), []metrics.Label{
-				{"state", "offered" },
-				{"output", "elasticsearch" },
-				{"index", o.index },
-				{"type", o.kind },
-			})
 
 			bulk := o.client.Bulk()
 
-			for _, e := range dataEvents {
+			actions := make([]*core.Action, len(dataEvents))
+
+			for idx, e := range dataEvents {
 				bulk.Add(elastic.NewBulkIndexRequest().
 					Index(o.index).
 					Type(o.kind).
 					Id(string(e.GetKey())).
 					Doc(string(e.GetValue())))
+
+				actions[idx] = core.NewAction(o.serviceName, "elasticsearch-output", "INDEX")
 			}
 
 			resp, err := bulk.Do(context.Background())
 
+			// -- end all actions if something went wrong sending to ES
 			if err != nil {
-				logrus.Warn("Unable to index the events! ", err.Error())
+				for _, v := range actions {
+					v.Ended(err)
+				}
+				break
 			}
 
-			errorCount := 0
-			successCount := 0
-
-			for _, v := range resp.Items {
+			for idx, v := range resp.Items {
 				r, ok := v["index"]
-				if !ok { continue }
+				if !ok {
+					continue
+				}
 
 				if r.Status >= 200 && r.Status < 300 {
-					successCount += 1
+					actions[idx].Ended(nil)
 				} else {
-					errorCount += 1
+					actions[idx].Ended(errors.New(r.Error.Reason))
 				}
 			}
 
-			if successCount > 0 {
-				o.metrics.IncrCounterWithLabels([]string{"output.messages.count"}, float32(successCount), []metrics.Label{
-					{"state", "success"},
-					{"output", "elasticsearch"},
-					{"index", o.index},
-					{"type", o.kind},
-				})
-			}
+			o.tracer.Actions(actions)
+		default:
 
-			if errorCount > 0 {
-				o.metrics.IncrCounterWithLabels([]string{"output.messages.count"}, float32(errorCount), []metrics.Label{
-					{"state", "failed"},
-					{"output", "elasticsearch"},
-					{"index", o.index},
-					{"type", o.kind},
-				})
-			}
-
-		case err := <-errorsChannel:
-			logrus.Error(err)
 		}
 	}
 }
-
-

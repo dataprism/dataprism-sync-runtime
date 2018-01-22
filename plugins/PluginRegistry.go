@@ -6,29 +6,29 @@ import (
 )
 
 type PluginRegistry struct {
-	plugins map[string]DataprismSyncPlugin
+	plugins map[string]*DataprismSyncPlugin
 	inputs map[string]*InputType
 	outputs map[string]*OutputType
 }
 
-func NewPluginRegistry() *PluginRegistry {
+func NewSyncPluginRegistry() *PluginRegistry {
 	return &PluginRegistry{
-		make(map[string]DataprismSyncPlugin, 1),
+		make(map[string]*DataprismSyncPlugin, 1),
 		make(map[string]*InputType, 1),
 		make(map[string]*OutputType, 1),
 	}
 }
 
-func (r *PluginRegistry) Add(p DataprismSyncPlugin) error {
-	if _, ok := r.plugins[p.Id()]; ok {
-		return errors.New("a plugin with id " + p.Id() + " has already been registered")
+func (r *PluginRegistry) Add(p *DataprismSyncPlugin) error {
+	if _, ok := r.plugins[p.Id]; ok {
+		return errors.New("a plugin with id " + p.Id + " has already been registered")
 	}
 
-	logrus.Infof("Added the %s plugin", p.Id())
-	r.plugins[p.Id()] = p
+	logrus.Infof("Added the %s plugin", p.Id)
+	r.plugins[p.Id] = p
 
-	for _, v := range p.InputTypes() { r.inputs[v.Id] = v }
-	for _, v := range p.OutputTypes() { r.outputs[v.Id] = v }
+	for _, v := range p.InputTypes { r.inputs[v.Id] = v }
+	for _, v := range p.OutputTypes { r.outputs[v.Id] = v }
 
 	return nil
 }
@@ -51,6 +51,11 @@ func (r *PluginRegistry) GetOutputType(id string) (*OutputType, bool) {
 	return res, ok
 }
 
-func (r *PluginRegistry) Plugins(p DataprismSyncPlugin) map[string]DataprismSyncPlugin {
-	return r.plugins
+func (r *PluginRegistry) Plugins() []string {
+	keys := make([]string, 0, len(r.plugins))
+	for k := range r.plugins {
+		keys = append(keys, k)
+	}
+
+	return keys
 }

@@ -19,7 +19,7 @@ func NewDataBuffer(out chan []Data, size int, timeout time.Duration) *DataBuffer
 	return &DataBuffer{ out, size, time.NewTicker(timeout), make([]Data, size), 0}
 }
 
-func (b *DataBuffer) Run(done chan int, dataChannel chan Data, errorsChannel chan error) {
+func (b *DataBuffer) Run(done chan int, dataChannel chan Data) {
 	for {
 		select {
 			case <- done:

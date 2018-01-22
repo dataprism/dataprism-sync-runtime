@@ -6,18 +6,18 @@ import (
 	"github.com/sirupsen/logrus"
 	"time"
 	"github.com/dataprism/dataprism-sync-runtime/core"
-	"github.com/armon/go-metrics"
 )
 
 type KafkaOutputWorker struct {
 	producer kafka.Producer
-	metrics *metrics.Metrics
+	tracer core.Tracer
+	serviceName string
 
 	errorTopic string
 	dataTopic string
 }
 
-func NewKafkaOutputWorker(config map[string]string, metrics *metrics.Metrics) (core.OutputWorker, error) {
+func NewKafkaOutputWorker(config map[string]string, tracer core.Tracer) (core.OutputWorker, error) {
 	if _, ok := config["output_kafka_error_topic"]; !ok {
 		config["output_kafka_error_topic"] = "errors"
 	}
@@ -41,20 +41,21 @@ func NewKafkaOutputWorker(config map[string]string, metrics *metrics.Metrics) (c
 	} else {
 		return &KafkaOutputWorker{
 			producer: *p,
-			metrics: metrics,
+			tracer: tracer,
 			errorTopic: config["output_kafka_error_topic"],
 			dataTopic: config["output_kafka_data_topic"],
+			serviceName: config["app"],
 		}, nil
 	}
 }
 
-func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan []core.Data, errorsChannel chan error) {
+func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan []core.Data) {
 	run := true
 
 	for run == true {
 		select {
 		case <-done:
-			logrus.Info("Stopping Kafka Output On User Request")
+			o.tracer.Event(core.NewTracerEvent(o.serviceName, "kafka-output", "USER_SHUTDOWN", ""))
 			run = false
 
 		case evt := <-o.producer.Events():
@@ -62,12 +63,9 @@ func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan []core.Data, err
 			case *kafka.Message:
 				m := ev
 				if m.TopicPartition.Error != nil {
-					logrus.Errorf("delivery failed: %v\n", m.TopicPartition.Error)
-					o.metrics.IncrCounter([]string{"output.kafka.delivery_failed"}, 1)
+					o.tracer.Event(core.NewTracerEvent(o.serviceName, "kafka-output", "ERROR", "delivery failed: "+m.TopicPartition.Error.Error()))
 				} else {
-					logrus.Debugf("delivered message to topic %s [%d] at offset %v",
-						*m.TopicPartition.Topic, m.TopicPartition.Partition, m.TopicPartition.Offset)
-					o.metrics.IncrCounter([]string{"output.kafka.delivered"}, 1)
+					o.tracer.Event(core.NewTracerEvent(o.serviceName, "kafka-output", "DELIVERED", "delivered "+string(m.Key)+" to "+m.TopicPartition.String()))
 				}
 
 			default:
@@ -79,33 +77,23 @@ func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan []core.Data, err
 				continue
 			}
 
-			for _, e := range dataEvents {
-				o.producer.ProduceChannel() <- &kafka.Message{
+			actions := make([]*core.Action, len(dataEvents))
+
+			for i, e := range dataEvents {
+				actions[i] = core.NewAction(o.serviceName, "kafka-producer", "PRODUCE")
+
+				actions[i].Ended(o.producer.Produce(&kafka.Message{
 					TopicPartition: kafka.TopicPartition{Topic: &o.dataTopic, Partition: kafka.PartitionAny},
 					Timestamp:      time.Now(),
 					TimestampType:  kafka.TimestampLogAppendTime,
 					Key:            e.GetKey(),
 					Value:          e.GetValue(),
-				}
-
-				o.metrics.IncrCounter([]string{"output.kafka.written"}, 1)
+				}, nil))
 			}
 
-		case errorEvent := <-errorsChannel:
-			if errorEvent == nil {
-				continue
-			}
+			o.tracer.Actions(actions)
+		default:
 
-			o.producer.ProduceChannel() <- &kafka.Message{
-				TopicPartition: kafka.TopicPartition{Topic: &o.errorTopic, Partition: kafka.PartitionAny},
-				Timestamp:      time.Now(),
-				TimestampType:  kafka.TimestampLogAppendTime,
-				Value:          []byte(errorEvent.Error()),
-			}
-
-			o.metrics.IncrCounter([]string{"output.kafka.errors"}, 1)
 		}
 	}
 }
-
-

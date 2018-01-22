@@ -3,18 +3,18 @@ package kafka
 import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"errors"
-	"github.com/sirupsen/logrus"
 	"github.com/dataprism/dataprism-sync-runtime/core"
-	"github.com/armon/go-metrics"
+	"time"
 )
 
 type KafkaInputWorker struct {
 	consumer *kafka.Consumer
 	topic string
-	metrics *metrics.Metrics
+	tracer core.Tracer
+	serviceName string
 }
 
-func NewKafkaInputWorker(config map[string]string, metrics *metrics.Metrics) (core.InputWorker, error) {
+func NewKafkaInputWorker(config map[string]string, tracer core.Tracer) (core.InputWorker, error) {
 
 	if _, ok := config["input_kafka_topic"]; !ok {
 		return nil, errors.New("no data topic has been set")
@@ -42,59 +42,82 @@ func NewKafkaInputWorker(config map[string]string, metrics *metrics.Metrics) (co
 	}
 
 	res := KafkaInputWorker{
-		metrics: metrics,
+		tracer: tracer,
 		consumer: consumer,
 		topic: config["input.kafka.topic"],
+		serviceName: config["app"],
 	}
 
 	return &res, nil
 }
 
-func (i *KafkaInputWorker) Run(done chan int, dataChannel chan core.Data, errorsChannel chan error) {
+func (i *KafkaInputWorker) Run(done chan int, dataChannel chan core.Data) {
+	a := core.NewAction(i.serviceName, "kafka-consumer", "Subscribe")
 	err := i.consumer.Subscribe(i.topic, nil)
+	a.Ended(err)
+	i.tracer.Action(a);
 
 	// -- return if we were unable to subscribe to the data topic
 	if err != nil {
-		errorsChannel <- err
 		done <- 1
 	}
-
-	logrus.Infof("Subscribed to topic %s", i.topic)
 
 	run := true
 
 	for run == true {
 		select {
 		case <- done:
-			logrus.Info("Stopping Kafka Input On User Request")
+			i.tracer.Event(core.NewTracerEvent(i.serviceName, "kafka-input", "USER_SHUTDOWN", ""))
 			run = false
 
 		case ev := <-i.consumer.Events():
 			switch e := ev.(type) {
 			case kafka.AssignedPartitions:
-				i.metrics.IncrCounter([]string{"input.kafka.assigned_partitions"}, 1)
-				i.consumer.Assign(e.Partitions)
+				i.tracer.Event(NewKafkaTracerEvent(i.serviceName, "ASSIGNED_PARTITIONS", e.String()))
+				a := core.NewAction(i.serviceName,"kafka-consumer", "ASSIGN_PARTITIONS")
+				a.Ended(i.consumer.Assign(e.Partitions))
+				i.tracer.Action(a);
 
 			case kafka.RevokedPartitions:
-				i.metrics.IncrCounter([]string{"input.kafka.revoked_partitions"}, 1)
-				i.consumer.Unassign()
+				i.tracer.Event(NewKafkaTracerEvent(i.serviceName, "REVOKED_PARTITIONS", e.String()))
+				a := core.NewAction(i.serviceName,"kafka-consumer", "REVOKE_PARTITIONS")
+				a.Ended(i.consumer.Unassign())
+				i.tracer.Action(a);
 
 			case *kafka.Message:
-				dataChannel <- &core.RawData{e.Key, e.Value}
-				i.metrics.IncrCounter([]string{"input.kafka.read"}, 1)
+				i.tracer.Datum(NewKafkaTracerData(i.serviceName, e.TopicPartition, e.Timestamp))
 
-			case kafka.PartitionEOF:
-				i.metrics.IncrCounter([]string{"input.kafka.partition_eof"}, 1)
+				dataChannel <- &core.RawData{e.Key, e.Value}
 
 			case kafka.Error:
-				errorsChannel <- e
-				logrus.Error(e)
-				i.metrics.IncrCounter([]string{"input.kafka.errors"}, 1)
-				run = false
+				i.tracer.Event(NewKafkaTracerEvent(i.serviceName, "Error", e.String()))
 			}
 		}
 	}
 
-	logrus.Info("Closing Consumer")
-	i.consumer.Close()
+	a = core.NewAction(i.serviceName, "kafka-consumer", "Close")
+	a.Ended(i.consumer.Close())
+	i.tracer.Action(a);
+}
+
+func NewKafkaTracerEvent(app string, kind string, payload string ) *core.TracerEvent {
+	return &core.TracerEvent{
+		Application: app,
+		Timestamp: time.Now().UTC(),
+		Component: "kafka-consumer",
+		EventType: kind,
+		Payload: payload,
+	}
+}
+
+func NewKafkaTracerData(app string, tp kafka.TopicPartition, timestamp time.Time) *core.TracerData {
+	ts := time.Now().UTC()
+	src := tp.String()
+
+	return &core.TracerData{
+		Application: app,
+		Timestamp: ts,
+		Source: src,
+		TimeDifferenceMs: int64(ts.Sub(timestamp)),
+	}
 }
