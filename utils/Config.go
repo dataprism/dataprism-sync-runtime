@@ -12,7 +12,7 @@ func ParseEnvVars() map[string]string {
 	for _, e := range os.Environ() {
 		pair := strings.Split(e, "=")
 		config[pair[0]] = pair[1]
-		logrus.Info(pair[0] + " = " + pair[1])
+		logrus.Debug(pair[0] + " = " + pair[1])
 	}
 
 	return config

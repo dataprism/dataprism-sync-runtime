@@ -21,12 +21,12 @@ var (
 func main() {
 	flag.Parse()
 
-	// -- read the configuration from the environment variables
-	config := utils.ParseEnvVars()
-
 	// -- initialize logging
 	logrus.Info("Initializing Logging")
 	logrus.SetLevel(logrus.DebugLevel)
+
+	// -- read the configuration from the environment variables
+	config := utils.ParseEnvVars()
 
 	// -- initialize the tracer
 	logrus.Info("Initializing the tracer")
@@ -76,9 +76,5 @@ func main() {
 	logrus.Info("Starting the workers")
 	go outputWorker.Run(done, dataOutputChannel)
 	go buffer.Run(done, dataInputChannel)
-	go inputWorker.Run(done, dataInputChannel)
-
-	select {
-		case <- done:
-	}
+	inputWorker.Run(done, dataInputChannel)
 }

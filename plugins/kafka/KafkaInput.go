@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/dataprism/dataprism-sync-runtime/core"
 	"time"
+	"github.com/lytics/logrus"
 )
 
 type KafkaInputWorker struct {
@@ -34,7 +35,8 @@ func NewKafkaInputWorker(config map[string]string, tracer core.Tracer) (core.Inp
 		"session.timeout.ms":              	6000,
 		"go.events.channel.enable":        	true,
 		"go.application.rebalance.enable": 	true,
-		"default.topic.config":            	kafka.ConfigMap{"auto.offset.reset": "earliest"},
+		"auto.offset.reset": "earliest",
+		//"default.topic.config":            	kafka.ConfigMap{"auto.offset.reset": "earliest"},
 	})
 
 	if err != nil {
@@ -44,7 +46,7 @@ func NewKafkaInputWorker(config map[string]string, tracer core.Tracer) (core.Inp
 	res := KafkaInputWorker{
 		tracer: tracer,
 		consumer: consumer,
-		topic: config["input.kafka.topic"],
+		topic: config["input_kafka_topic"],
 		serviceName: config["app"],
 	}
 
@@ -53,6 +55,7 @@ func NewKafkaInputWorker(config map[string]string, tracer core.Tracer) (core.Inp
 
 func (i *KafkaInputWorker) Run(done chan int, dataChannel chan core.Data) {
 	a := core.NewAction(i.serviceName, "kafka-consumer", "Subscribe")
+	logrus.Info("Subscribing to " + i.topic)
 	err := i.consumer.Subscribe(i.topic, nil)
 	a.Ended(err)
 	i.tracer.Action(a);
@@ -89,9 +92,14 @@ func (i *KafkaInputWorker) Run(done chan int, dataChannel chan core.Data) {
 
 				dataChannel <- &core.RawData{e.Key, e.Value}
 
+				// -- manually commit the message
+				//i.consumer.CommitMessage(e)
+
 			case kafka.Error:
 				i.tracer.Event(NewKafkaTracerEvent(i.serviceName, "Error", e.String()))
 			}
+
+		//default:
 		}
 	}
 
@@ -118,6 +126,6 @@ func NewKafkaTracerData(app string, tp kafka.TopicPartition, timestamp time.Time
 		Application: app,
 		Timestamp: ts,
 		Source: src,
-		TimeDifferenceMs: int64(ts.Sub(timestamp)),
+		TimeDifferenceMs: ts.Unix() - timestamp.Unix(),
 	}
 }

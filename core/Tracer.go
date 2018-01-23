@@ -5,7 +5,8 @@ import (
 	"errors"
 	"context"
 	"sync"
-	"github.com/lytics/logrus"
+	"github.com/sirupsen/logrus"
+	"time"
 )
 
 type Tracer interface {
@@ -51,6 +52,7 @@ func NewElasticsearchTracer(config map[string]string) (Tracer, error) {
 		return &ElasticsearchTracer{
 			client: client,
 			index: config["tracer_es_index"],
+			lastRotation: time.Now(),
 		}, nil
 	}
 }
@@ -63,6 +65,7 @@ type ElasticsearchTracer struct {
 
 	client *elastic.Client
 	index string
+	lastRotation time.Time
 }
 
 func (t *ElasticsearchTracer) Event(e *TracerEvent) error {
@@ -80,14 +83,14 @@ func (t *ElasticsearchTracer) Events(e []*TracerEvent) error {
 }
 
 func (t *ElasticsearchTracer) Datum(e *TracerData) error {
-	return t.registerOne("data", e)
+	return t.registerOne("message", e)
 }
 
 func (t *ElasticsearchTracer) Data(e []*TracerData) error {
 	list := make([]elastic.BulkableRequest, len(e))
 
 	for idx, i := range e {
-		list[idx] = elastic.NewBulkIndexRequest().Type("data").Index(t.index).Doc(i)
+		list[idx] = elastic.NewBulkIndexRequest().Type("message").Index(t.index).Doc(i)
 	}
 
 	return t.registerMany(list)
@@ -128,6 +131,12 @@ func (t *ElasticsearchTracer) registerMany(act []elastic.BulkableRequest) error 
 }
 
 func (t *ElasticsearchTracer) rotateIfNeeded() {
+	logrus.Debug("exp: ", t.lastRotation.UTC().Add(10 * time.Second))
+	logrus.Debug("now: ", time.Now().UTC())
+
+	if t.lastRotation.Add(10 * time.Second).After(time.Now().UTC()) { return }
+	t.lastRotation = time.Now().UTC()
+
 	req := t.client.Bulk()
 	t.lock.Lock()
 	req.Add(t.buffer...)
@@ -140,5 +149,11 @@ func (t *ElasticsearchTracer) rotateIfNeeded() {
 		return
 	}
 
-	logrus.Infof("flushed traces to es: %d Registered, %d failed", len(resp.Indexed()), len(resp.Failed()))
+	for _, r := range resp.Failed() {
+		logrus.Debug(r.Error.Reason)
+	}
+
+	logrus.Infof("flushed traces to es: %d Indexed, %d Succeeded, %d Updated, %d Deleted, %d Failed", len(resp.Indexed()), len(resp.Succeeded()), len(resp.Updated()), len(resp.Deleted()), len(resp.Failed()))
+
+
 }

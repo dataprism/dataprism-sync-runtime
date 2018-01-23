@@ -2,12 +2,13 @@ package core
 
 import (
 	"time"
+	"github.com/sirupsen/logrus"
 )
 
 func NewAction(app string, component string, kind string) *Action {
 	return &Action{
 		Application: app,
-		Start: time.Now().UTC(),
+		Timestamp: time.Now().UTC(),
 		Component: component,
 		Kind: kind,
 	};
@@ -18,7 +19,7 @@ type Action struct {
 	Application string
 
 	// -- the moment at which the action occured
-	Start time.Time
+	Timestamp time.Time
 
 	// -- the moment at which the action finished
 	End time.Time
@@ -38,9 +39,10 @@ type Action struct {
 
 func (a *Action) Ended(err error) {
 	a.End = time.Now()
-	a.Duration = a.End.Sub(a.Start)
+	a.Duration = a.End.Sub(a.Timestamp)
 
 	if err != nil {
 		a.Error = err;
+		logrus.Warn("Action '" + a.Kind + "' Ended: ", err.Error());
 	}
 }

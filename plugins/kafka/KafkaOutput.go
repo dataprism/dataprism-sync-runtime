@@ -80,6 +80,8 @@ func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan []core.Data) {
 			actions := make([]*core.Action, len(dataEvents))
 
 			for i, e := range dataEvents {
+				if e == nil { continue }
+
 				actions[i] = core.NewAction(o.serviceName, "kafka-producer", "PRODUCE")
 
 				actions[i].Ended(o.producer.Produce(&kafka.Message{
@@ -92,7 +94,7 @@ func (o *KafkaOutputWorker) Run(done chan int, dataChannel chan []core.Data) {
 			}
 
 			o.tracer.Actions(actions)
-		default:
+		//default:
 
 		}
 	}

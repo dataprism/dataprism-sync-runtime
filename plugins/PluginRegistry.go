@@ -2,7 +2,7 @@ package plugins
 
 import (
 	"errors"
-	"github.com/lytics/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 type PluginRegistry struct {

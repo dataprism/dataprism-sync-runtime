@@ -2,7 +2,7 @@ package core
 
 import (
 	"time"
-	"github.com/lytics/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 type DataBuffer struct {
@@ -16,13 +16,14 @@ type DataBuffer struct {
 }
 
 func NewDataBuffer(out chan []Data, size int, timeout time.Duration) *DataBuffer {
-	return &DataBuffer{ out, size, time.NewTicker(timeout), make([]Data, size), 0}
+	return &DataBuffer{ out, size, time.NewTicker(timeout), make([]Data, 0), 0}
 }
 
 func (b *DataBuffer) Run(done chan int, dataChannel chan Data) {
 	for {
 		select {
 			case <- done:
+				logrus.Debug("<- done")
 				// -- clear what is left in the buffer
 				b.rotate()
 
@@ -32,8 +33,10 @@ func (b *DataBuffer) Run(done chan int, dataChannel chan Data) {
 				// -- break out of the loop
 				break
 			case msg := <- dataChannel:
+				logrus.Debug("<- data")
+
 				// -- add the message to the cache
-				b.cache[b.offset] = msg
+				b.cache = append(b.cache, msg)
 
 				// -- increase the offset
 				b.offset += 1
@@ -46,9 +49,13 @@ func (b *DataBuffer) Run(done chan int, dataChannel chan Data) {
 				}
 
 			case <- b.ticker.C:
+				logrus.Debug("<- ticker")
+
 				// -- rotate the buffer
 				logrus.Debug("rotating the buffer based on timeout")
 				b.rotate()
+
+			//default:
 		}
 	}
 }
@@ -58,7 +65,7 @@ func (b *DataBuffer) rotate() {
 	b.out <- b.cache
 
 	// -- create the new cache buffer
-	b.cache = make([]Data, b.size)
+	b.cache = make([]Data, 0)
 
 	// -- reset the offset
 	b.offset = 0
